@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PJOK Pro - Smart Attendance</title>
+    <!-- Libraries -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+        
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --secondary: #a855f7;
+            --bg-light: #f8fafc;
+        }
+
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            background-color: var(--bg-light);
+            color: #1e293b;
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .gradient-text {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .btn-active {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.3);
+        }
+
+        #reader {
+            border: none !important;
+            overflow: hidden;
+            border-radius: 1.5rem;
+        }
+
+        #reader video {
+            object-fit: cover !important;
+        }
+
+        .custom-scroll::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #e2e8f0;
+            border-radius: 10px;
+        }
+
+        .tab-transition {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @keyframes pulse-border {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(1.05); opacity: 0; }
+        }
+        .scan-guide {
+            position: relative;
+        }
+        .scan-guide::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border: 2px solid var(--primary);
+            border-radius: 1.5rem;
+            animation: pulse-border 2s infinite;
+        }
+    </style>
+</head>
+<body class="min-h-screen pb-28">
+
+    <!-- Header & Dashboard -->
+    <header class="bg-white px-6 pt-8 pb-10 rounded-b-[2.5rem] shadow-sm relative overflow-hidden">
+        <div class="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-indigo-50 rounded-full blur-3xl opacity-50"></div>
+        <div class="max-w-md mx-auto relative z-10">
+            <div class="flex justify-between items-start mb-6">
+                <div>
+                    <h1 class="text-3xl font-extrabold tracking-tight text-slate-900">PJOK<span class="text-indigo-600">Pro</span></h1>
+                    <p class="text-slate-500 font-medium">Sistem Absensi Cerdas</p>
+                </div>
+                <button onclick="toggleSettings()" class="p-3 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-colors">
+                    <svg class="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                </button>
+            </div>
+
+            <!-- Stats Card -->
+            <div class="grid grid-cols-2 gap-4">
+                <div class="bg-gradient-to-br from-indigo-500 to-indigo-700 p-5 rounded-[2rem] text-white shadow-xl shadow-indigo-100">
+                    <p class="text-xs font-semibold uppercase tracking-wider opacity-80 mb-1">Kehadiran</p>
+                    <div class="flex items-baseline gap-2">
+                        <span id="counter" class="text-3xl font-bold">0</span>
+                        <span class="text-sm opacity-80">Siswa</span>
+                    </div>
+                </div>
+                <div class="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Kelas Aktif</p>
+                    <span id="display-grade" class="text-xl font-bold text-slate-800">—</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Floating Navigation Bar -->
+    <nav class="fixed bottom-6 left-6 right-6 z-50">
+        <div class="max-w-md mx-auto glass p-2 rounded-[2rem] shadow-2xl flex items-center justify-between">
+            <button onclick="switchTab('scanner')" id="btn-tab-scanner" class="flex-1 flex flex-col items-center py-3 gap-1 rounded-2xl btn-active tab-transition">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+                <span class="text-[10px] font-bold">SCANNER</span>
+            </button>
+            <button onclick="switchTab('data')" id="btn-tab-data" class="flex-1 flex flex-col items-center py-3 gap-1 rounded-2xl text-slate-400 hover:text-slate-600 tab-transition">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                <span class="text-[10px] font-bold">DATABASE</span>
+            </button>
+        </div>
+    </nav>
+
+    <main class="max-w-md mx-auto px-6 -mt-4 relative z-20">
+        
+        <!-- MODAL SETTINGS (Hidden initially) -->
+        <div id="settings-panel" class="hidden animate-in slide-in-from-top duration-300 bg-white p-6 rounded-[2rem] shadow-xl border border-slate-100 mb-6">
+            <h3 class="font-bold text-slate-800 mb-4">Pengaturan Web App</h3>
+            <input type="text" id="scriptUrl" placeholder="Masukkan URL Google Script..." 
+                class="w-full p-4 text-sm bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all mb-3">
+            <button onclick="saveSettings()" class="w-full bg-slate-900 text-white py-4 rounded-2xl text-sm font-bold active:scale-95 transition-transform">Simpan Konfigurasi</button>
+        </div>
+
+        <!-- VIEW: SCANNER -->
+        <div id="view-scanner" class="space-y-6">
+            
+            <!-- Class Selection Cards -->
+            <section>
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-sm font-bold text-slate-800 uppercase tracking-widest">Pilih Kelas</h2>
+                </div>
+                <div class="grid grid-cols-3 gap-3">
+                    <script>
+                        for(let i=1; i<=6; i++) {
+                            document.write(`
+                                <button onclick="setGrade(${i})" data-grade="${i}" class="grade-btn bg-white border border-slate-100 p-4 rounded-2xl flex flex-col items-center gap-2 shadow-sm hover:shadow-md active:scale-95 transition-all">
+                                    <span class="text-lg font-extrabold text-slate-800">${i}</span>
+                                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Kelas</span>
+                                </button>
+                            `);
+                        }
+                    </script>
+                </div>
+            </section>
+
+            <!-- Modern Scanner Box -->
+            <section class="relative group">
+                <div class="bg-white p-4 rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden">
+                    <div id="scanner-wrapper" class="relative rounded-[2rem] overflow-hidden bg-slate-900 aspect-square">
+                        <div id="reader" class="w-full h-full"></div>
+                        <!-- Decorative overlay -->
+                        <div class="absolute inset-0 pointer-events-none border-[12px] border-white/10 rounded-[2rem]"></div>
+                    </div>
+                    <div class="mt-4 text-center">
+                        <div id="status-indicator" class="inline-flex items-center gap-2 px-4 py-2 bg-slate-50 rounded-full mb-2">
+                            <span class="w-2 h-2 bg-slate-300 rounded-full animate-pulse"></span>
+                            <span id="status-text" class="text-xs font-bold text-slate-500 uppercase tracking-wider">Menunggu Kelas...</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Activity Logs -->
+            <section class="bg-white p-6 rounded-[2.5rem] shadow-md border border-slate-100">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-sm font-bold text-slate-800 uppercase tracking-widest">Riwayat Sesi</h2>
+                    <button onclick="sendRekapToWA()" id="btn-rekap-wa" class="hidden text-xs font-bold text-indigo-600 bg-indigo-50 px-4 py-2 rounded-full active:scale-95 transition-transform">
+                        Kirim Rekap WA
+                    </button>
+                </div>
+                
+                <div id="log-list" class="space-y-3 max-h-80 overflow-y-auto custom-scroll pr-2">
+                    <div class="text-center py-10">
+                        <div class="bg-slate-50 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-300">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        </div>
+                        <p class="text-xs text-slate-400 italic">Belum ada aktivitas hari ini</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- VIEW: DATA SISWA -->
+        <div id="view-data" class="hidden space-y-6">
+            
+            <!-- Modern Form Card -->
+            <section class="bg-white p-6 rounded-[2.5rem] shadow-xl border border-slate-100">
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center text-indigo-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path></svg>
+                    </div>
+                    <h3 class="font-extrabold text-slate-800 tracking-tight">Input Siswa Manual</h3>
+                </div>
+                
+                <div class="space-y-4">
+                    <div class="group">
+                        <label class="text-[10px] font-bold text-slate-400 uppercase ml-2 mb-1 block tracking-widest">Nama Lengkap</label>
+                        <input type="text" id="inputName" placeholder="Contoh: Ahmad Fauzi" class="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-400 uppercase ml-2 mb-1 block tracking-widest">ID / NISN</label>
+                            <input type="text" id="inputID" placeholder="ID Unik" class="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-slate-400 uppercase ml-2 mb-1 block tracking-widest">Kelas</label>
+                            <select id="inputGrade" class="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
+                                <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+                                <option value="4">4</option><option value="5">5</option><option value="6">6</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <button onclick="addStudent()" class="w-full py-4 rounded-2xl text-white font-bold btn-active active:scale-95 transition-all">
+                        Simpan Data
+                    </button>
+                </div>
+            </section>
+
+            <!-- Excel Import Card -->
+            <section class="bg-indigo-600 p-6 rounded-[2.5rem] shadow-xl text-white">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"></path></svg>
+                    </div>
+                    <h3 class="font-extrabold">Import dari Excel</h3>
+                </div>
+                <input type="file" id="excelFile" accept=".xlsx, .xls" class="hidden" onchange="handleExcel(event)">
+                <button onclick="document.getElementById('excelFile').click()" class="w-full bg-white/20 hover:bg-white/30 border-2 border-dashed border-white/30 py-8 rounded-[2rem] flex flex-col items-center gap-2 transition-all active:scale-95">
+                    <span class="text-sm font-bold">Pilih File Excel Anda</span>
+                    <span class="text-[10px] opacity-70 italic font-medium uppercase tracking-widest">Format: Nama, ID, Kelas</span>
+                </button>
+            </section>
+
+            <!-- Database List -->
+            <section class="bg-white p-6 rounded-[2.5rem] shadow-md border border-slate-100">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-sm font-bold text-slate-800 uppercase tracking-widest">Database Siswa</h3>
+                    <button onclick="clearAllData()" class="text-[10px] font-bold text-red-500 underline underline-offset-4">Reset Database</button>
+                </div>
+                <div id="student-list" class="space-y-3 max-h-96 overflow-y-auto custom-scroll pr-2"></div>
+            </section>
+        </div>
+    </main>
+
+    <!-- UI MODAL: QR Code Display -->
+    <div id="qr-modal" class="fixed inset-0 bg-slate-900/90 hidden items-center justify-center p-6 z-[100] backdrop-blur-md">
+        <div class="bg-white w-full max-w-sm p-8 rounded-[3rem] text-center shadow-2xl scale-in-center">
+            <div class="bg-indigo-50 w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-6 text-indigo-600">
+                <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+            </div>
+            <h3 id="modal-title" class="text-2xl font-extrabold text-slate-900 mb-1">Nama Siswa</h3>
+            <p id="modal-subtitle" class="text-sm text-slate-400 font-bold tracking-widest uppercase mb-8">ID: 12345</p>
+            
+            <div id="qrcode-container" class="inline-block p-4 bg-white border-2 border-slate-50 rounded-[2.5rem] shadow-inner mb-8"></div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="downloadQR()" class="py-4 bg-slate-900 text-white rounded-2xl font-bold text-sm active:scale-95 transition-transform">Download</button>
+                <button onclick="closeQRModal()" class="py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold text-sm active:scale-95 transition-transform">Tutup</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- UI: Floating Toast -->
+    <div id="toast" class="fixed bottom-24 left-1/2 -translate-x-1/2 glass px-8 py-4 rounded-[2rem] text-sm font-bold shadow-2xl opacity-0 translate-y-4 transition-all pointer-events-none z-[1000] text-indigo-600 border border-indigo-100">
+        Pesan Berhasil
+    </div>
+
+    <script>
+        // State
+        let selectedGrade = null;
+        let html5QrCode = null;
+        let isProcessing = false;
+        let attendanceCount = 0;
+        let students = JSON.parse(localStorage.getItem('pjok_students') || '[]');
+        let dailyLogs = []; 
+        let currentModalSiswa = { id: '', name: '' };
+
+        window.onload = () => {
+            const savedUrl = localStorage.getItem('pjok_script_url');
+            if (savedUrl) document.getElementById('scriptUrl').value = savedUrl;
+            renderStudentList();
+            initScanner();
+        };
+
+        function toggleSettings() {
+            const panel = document.getElementById('settings-panel');
+            panel.classList.toggle('hidden');
+        }
+
+        function switchTab(tab) {
+            const views = ['scanner', 'data'];
+            views.forEach(v => {
+                document.getElementById('view-' + v).classList.add('hidden');
+                document.getElementById('btn-tab-' + v).classList.remove('btn-active');
+                document.getElementById('btn-tab-' + v).classList.add('text-slate-400');
+            });
+            document.getElementById('view-' + tab).classList.remove('hidden');
+            document.getElementById('btn-tab-' + tab).classList.add('btn-active');
+            document.getElementById('btn-tab-' + tab).classList.remove('text-slate-400');
+        }
+
+        function setGrade(grade) {
+            selectedGrade = grade;
+            document.getElementById('display-grade').innerText = grade;
+            document.querySelectorAll('.grade-btn').forEach(btn => {
+                if(btn.dataset.grade == grade) {
+                    btn.classList.add('btn-active', 'border-indigo-200');
+                    btn.classList.remove('bg-white', 'text-slate-800');
+                } else {
+                    btn.classList.remove('btn-active', 'border-indigo-200');
+                    btn.classList.add('bg-white', 'text-slate-800');
+                }
+            });
+            
+            const statusIndicator = document.getElementById('status-indicator').querySelector('span');
+            statusIndicator.className = "w-2 h-2 bg-green-500 rounded-full animate-ping";
+            document.getElementById('status-text').innerText = "Siap Pindai Kelas " + grade;
+            document.getElementById('scanner-wrapper').classList.add('scan-guide');
+            
+            showToast("Kelas " + grade + " Terpilih");
+        }
+
+        // --- Core Functions (Logic tetap sama tapi dibungkus UI baru) ---
+
+        function addStudent() {
+            const name = document.getElementById('inputName').value.trim();
+            const id = document.getElementById('inputID').value.trim();
+            const grade = document.getElementById('inputGrade').value;
+
+            if (!name || !id) return showToast("Isi data lengkap!");
+            if (students.find(s => s.id === id)) return showToast("ID sudah terdaftar");
+
+            students.push({ id, name, grade });
+            saveAndRender();
+            
+            document.getElementById('inputName').value = '';
+            document.getElementById('inputID').value = '';
+            showToast("Siswa Berhasil Ditambahkan");
+        }
+
+        function handleExcel(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                
+                let added = 0;
+                jsonData.forEach(row => {
+                    const name = row.Nama || row.nama || row.Name || "";
+                    const id = String(row.ID || row.id || row.NISN || "");
+                    const grade = String(row.Kelas || row.kelas || "1");
+                    if (name && id && !students.find(s => s.id === id)) {
+                        students.push({ id, name, grade: grade.replace(/[^0-9]/g, '') });
+                        added++;
+                    }
+                });
+                saveAndRender();
+                showToast(added + " Siswa di-import");
+                event.target.value = '';
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function saveAndRender() {
+            localStorage.setItem('pjok_students', JSON.stringify(students));
+            renderStudentList();
+        }
+
+        function renderStudentList() {
+            const container = document.getElementById('student-list');
+            if (students.length === 0) {
+                container.innerHTML = `<p class="text-center text-slate-400 py-10 text-xs italic">Database kosong</p>`;
+                return;
+            }
+            container.innerHTML = students.map((s, idx) => `
+                <div class="flex items-center justify-between p-5 bg-slate-50 rounded-[1.5rem] border border-slate-100 hover:border-indigo-100 transition-all">
+                    <div class="flex-1">
+                        <p class="font-bold text-slate-800">${s.name}</p>
+                        <p class="text-[9px] font-extrabold text-slate-400 tracking-widest uppercase">Kls ${s.grade} • ID: ${s.id}</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="showQR('${s.id}', '${s.name}')" class="p-3 bg-white text-indigo-600 rounded-xl shadow-sm active:scale-90 transition-transform"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg></button>
+                        <button onclick="deleteStudent(${idx})" class="p-3 bg-white text-red-400 rounded-xl shadow-sm active:scale-90 transition-transform"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function deleteStudent(index) {
+            if(confirm("Hapus data siswa?")) { students.splice(index, 1); saveAndRender(); }
+        }
+
+        function clearAllData() {
+            if(confirm("Reset database? Semua data akan hilang.")) { students = []; saveAndRender(); }
+        }
+
+        // --- QR & DOWNLOAD ---
+        function showQR(id, name) {
+            currentModalSiswa = { id, name };
+            const container = document.getElementById('qrcode-container');
+            container.innerHTML = '';
+            document.getElementById('modal-title').innerText = name;
+            document.getElementById('modal-subtitle').innerText = "ID: " + id;
+            new QRCode(container, { text: id, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.H });
+            const modal = document.getElementById('qr-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function downloadQR() {
+            const canvas = document.querySelector('#qrcode-container canvas');
+            if (canvas) {
+                const link = document.createElement('a');
+                link.href = canvas.toDataURL("image/png");
+                link.download = `QR_${currentModalSiswa.name.replace(/\s+/g, '_')}.png`;
+                link.click();
+                showToast("Berhasil diunduh");
+            }
+        }
+
+        function closeQRModal() { document.getElementById('qr-modal').classList.add('hidden'); }
+
+        // --- SCANNER ---
+        function initScanner() {
+            html5QrCode = new Html5Qrcode("reader");
+            html5QrCode.start({ facingMode: "environment" }, { fps: 20, qrbox: 280 }, onScanSuccess)
+            .catch(err => { document.getElementById('status-text').innerText = "Error Kamera"; });
+        }
+
+        function onScanSuccess(decodedText) {
+            if (isProcessing) return;
+            if (!selectedGrade) return showToast("Pilih kelas dulu!");
+
+            isProcessing = true;
+            const student = students.find(s => s.id === decodedText);
+            const name = student ? student.name : "ID: " + decodedText;
+
+            const time = new Date().toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'});
+            dailyLogs.push({ name, id: decodedText, time });
+
+            sendToGoogleSheets(decodedText, name);
+            setTimeout(() => { isProcessing = false; }, 3000);
+        }
+
+        async function sendToGoogleSheets(id, name) {
+            const url = localStorage.getItem('pjok_script_url');
+            const data = { id, nama: name, kelas: selectedGrade, waktu: new Date().toLocaleString('id-ID'), mapel: 'PJOK' };
+
+            try {
+                if (url) { await fetch(url, { method: 'POST', mode: 'no-cors', body: JSON.stringify(data) }); }
+                addLogUI(name, "Hadir");
+                showToast("Absen: " + name);
+                attendanceCount++;
+                document.getElementById('counter').innerText = attendanceCount;
+                document.getElementById('btn-rekap-wa').classList.remove('hidden');
+                window.navigator.vibrate?.(100);
+            } catch (error) { addLogUI(name, "Offline"); }
+        }
+
+        function addLogUI(name, status) {
+            const list = document.getElementById('log-list');
+            if (attendanceCount === 0) list.innerHTML = '';
+            
+            const time = new Date().toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'});
+            const item = document.createElement('div');
+            item.className = "flex justify-between items-center p-4 bg-slate-50 rounded-2xl border border-slate-100 animate-in fade-in slide-in-from-left duration-500";
+            item.innerHTML = `
+                <div>
+                    <p class="font-bold text-slate-800 text-sm">${name}</p>
+                    <p class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">${time} • Kls ${selectedGrade}</p>
+                </div>
+                <div class="flex gap-2">
+                     <button onclick="sendSingleToWA('${name}', '${time}')" class="p-2 bg-white text-green-500 rounded-xl shadow-sm"><svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/></svg></button>
+                    <span class="text-[8px] font-extrabold px-2 py-1 flex items-center rounded-lg bg-indigo-50 text-indigo-600 uppercase tracking-tighter">${status}</span>
+                </div>
+            `;
+            list.prepend(item);
+        }
+
+        // --- UTILS ---
+        function saveSettings() {
+            localStorage.setItem('pjok_script_url', document.getElementById('scriptUrl').value);
+            showToast("Pengaturan Disimpan");
+            toggleSettings();
+        }
+
+        function sendRekapToWA() {
+            let message = `*REKAP ABSENSI PJOK*\n*Kls:* ${selectedGrade} | *Tgl:* ${new Date().toLocaleDateString('id-ID')}\n----------------------------\n`;
+            dailyLogs.forEach((l, i) => message += `${i + 1}. ${l.name} (${l.time})\n`);
+            message += `----------------------------\n_Total: ${dailyLogs.length} Siswa_`;
+            window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+        }
+
+        function sendSingleToWA(name, time) {
+            const message = `📢 *INFO PJOK*\nSiswa *${name}* telah hadir di jam *${time}* untuk Mapel PJOK Kelas ${selectedGrade}.`;
+            window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+        }
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.innerText = msg;
+            t.classList.remove('opacity-0', 'translate-y-4');
+            t.classList.add('opacity-100', 'translate-y-0');
+            setTimeout(() => {
+                t.classList.add('opacity-0', 'translate-y-4');
+                t.classList.remove('opacity-100', 'translate-y-0');
+            }, 2500);
+        }
+    </script>
+</body>
+</html>
